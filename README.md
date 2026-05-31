@@ -1,3 +1,5 @@
+![UFC Logo](https://upload.wikimedia.org/wikipedia/commons/9/92/UFC_Logo.svg)
+
 # UFC Scraper Microservice
 
 This is the standalone Python microservice responsible for scraping UFC events, fight cards, results, and fighter statistics from `ufcstats.com`. It provides up-to-date data for the core UFC Fight Predictor application and the FastAPI Machine Learning model.
