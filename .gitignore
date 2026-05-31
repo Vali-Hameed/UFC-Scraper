@@ -29,3 +29,8 @@ build/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Scratch / Test Scripts
+get_events.py
+test_scraper.py
+test_scraper_pw.py
