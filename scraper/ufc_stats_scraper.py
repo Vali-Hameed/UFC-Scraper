@@ -52,9 +52,12 @@ class UFCStatsScraper:
             location = columns[1].text.strip().replace('\n', ' ') if len(columns) > 1 else None
             
             status = "COMPLETED"
+            iso_date_str = None
             if date_str:
                 try:
                     event_date = datetime.strptime(date_str, "%B %d, %Y")
+                    # Add UTC timezone info for ISO-8601 compatibility with OffsetDateTime
+                    iso_date_str = event_date.isoformat() + "Z"
                     if event_date > datetime.now():
                         status = "UPCOMING"
                 except Exception:
@@ -62,16 +65,16 @@ class UFCStatsScraper:
             
             events_data.append({
                 "name": name,
-                "eventDate": date_str,
+                "eventDate": iso_date_str,
                 "location": location,
-                "url": event_link,
+                "url": url,
                 "status": status
             })
             
         browser.close()
         return events_data
 
-    def scrape_fight_card(self, p, event_url: str) -> List[Dict[str, Any]]:
+    def scrape_fight_card(self, p, event_url: str, event_status: str = "COMPLETED") -> List[Dict[str, Any]]:
         """Scrape the fights for a specific event URL."""
         logger.info(f"Scraping fight card from {event_url}...")
         
@@ -80,17 +83,16 @@ class UFCStatsScraper:
         page.goto(event_url)
         page.wait_for_selector('.b-fight-details__table', timeout=30000)
         
-        soup = BeautifulSoup(page.content(), 'html.parser')
+        html = page.content()
+        soup = BeautifulSoup(html, 'html.parser')
         
         fights_data = []
-        rows = soup.select('.b-fight-details__table-row')
         
-        # Skip header
-        for idx, row in enumerate(rows[1:]):
+        for idx, row in enumerate(soup.select('tbody tr')):
             cols = row.select('td')
-            if not cols:
+            if not cols or len(cols) < 2:
                 continue
-            
+                
             fighters = cols[1].select('a')
             if len(fighters) < 2:
                 continue
@@ -107,14 +109,26 @@ class UFCStatsScraper:
             win_round = cols[8].select_one('p').text.strip() if len(cols) > 8 and cols[8].select_one('p') else None
             time = cols[9].select_one('p').text.strip() if len(cols) > 9 and cols[9].select_one('p') else None
             
-            # Determine winner by looking at the W/L badge in the first column
-            win_badges = cols[0].select('.b-flag__text')
             winner = None
-            if len(win_badges) >= 2:
-                if "win" in win_badges[0].text.strip().lower():
-                    winner = fighter1_name
-                elif "win" in win_badges[1].text.strip().lower():
-                    winner = fighter2_name
+            br_found = False
+            for child in cols[0].children:
+                if child.name == 'br':
+                    br_found = True
+                    continue
+                
+                # If child is a tag and contains the "win" badge
+                if child.name and "win" in child.text.strip().lower():
+                    if not br_found:
+                        winner = fighter1_name
+                    else:
+                        winner = fighter2_name
+                    break
+                    
+            fight_status = event_status
+            if event_status == "COMPLETED" and not winner:
+                fight_status = "CANCELED"
+            elif event_status == "UPCOMING":
+                fight_status = "UPCOMING"
             
             fights_data.append({
                 "fighter1Name": fighter1_name,
@@ -127,7 +141,8 @@ class UFCStatsScraper:
                 "resultRound": win_round,
                 "resultTime": time,
                 "fighter1Url": fighter1_url,
-                "fighter2Url": fighter2_url
+                "fighter2Url": fighter2_url,
+                "status": fight_status
             })
             
         browser.close()
@@ -258,12 +273,13 @@ def run_scraper_job():
             # 1. Scrape Events
             upcoming_events = scraper.scrape_events(p, scraper.upcoming_url)
             completed_events = scraper.scrape_events(p, scraper.completed_url)
-            events = upcoming_events + completed_events
-            logger.info(f"Scraped {len(events)} total events.")
             
-            # Process the top 6 events (Upcoming + 5 Completed)
+            # Process the top 6 events (Upcoming + 5 Completed)            
+            events_to_process = upcoming_events[:5] + completed_events[:5]
+            logger.info(f"Scraped {len(upcoming_events) + len(completed_events)} total events. Processing {len(events_to_process)} events.")
+            
             fights_updated = 0
-            for recent_event in events[:6]:
+            for recent_event in events_to_process:
                 # post_events returns the saved entities from the backend
                 saved_events = scraper.api_client.post_events([recent_event])
                 db_event_id = None
@@ -271,7 +287,7 @@ def run_scraper_job():
                     db_event_id = saved_events[0].get('id')
                 
                 # 2. Scrape fight card for the event
-                fights = scraper.scrape_fight_card(p, recent_event['url'])
+                fights = scraper.scrape_fight_card(p, recent_event['url'], recent_event['status'])
                 logger.info(f"Scraped {len(fights)} fights for {recent_event['name']}")
                 
                 if db_event_id:
@@ -294,7 +310,7 @@ def run_scraper_job():
         scraper.api_client.post_logs({
             "startedAt": start_time.isoformat() + "Z",
             "completedAt": end_time.isoformat() + "Z",
-            "eventsFound": len(events) if events else 0,
+            "eventsFound": len(events_to_process) if 'events_to_process' in locals() else 0,
             "fightsUpdated": fights_updated,
             "status": "COMPLETED",
             "errorMessage": None
