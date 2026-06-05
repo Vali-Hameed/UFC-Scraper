@@ -110,23 +110,38 @@ class UFCStatsScraper:
             time = cols[9].select_one('p').text.strip() if len(cols) > 9 and cols[9].select_one('p') else None
             
             winner = None
+            is_draw = False
+            is_nc = False
             br_found = False
             for child in cols[0].children:
                 if child.name == 'br':
                     br_found = True
                     continue
                 
-                # If child is a tag and contains the "win" badge
-                if child.name and "win" in child.text.strip().lower():
-                    if not br_found:
-                        winner = fighter1_name
-                    else:
-                        winner = fighter2_name
-                    break
+                if child.name:
+                    badge_text = child.text.strip().lower()
+                    if "win" in badge_text:
+                        if not br_found:
+                            winner = fighter1_name
+                        else:
+                            winner = fighter2_name
+                        break
+                    elif "draw" in badge_text:
+                        is_draw = True
+                        break
+                    elif "nc" in badge_text:
+                        is_nc = True
+                        break
+                        
+            if is_draw:
+                winner = "Draw"
+            elif is_nc:
+                winner = "No Contest"
                     
             fight_status = event_status
             if event_status == "COMPLETED" and not winner:
                 fight_status = "CANCELED"
+                winner = "Canceled"
             elif event_status == "UPCOMING":
                 fight_status = "UPCOMING"
             
@@ -274,8 +289,8 @@ def run_scraper_job():
             upcoming_events = scraper.scrape_events(p, scraper.upcoming_url)
             completed_events = scraper.scrape_events(p, scraper.completed_url)
             
-            # Process the top 6 events (Upcoming + 5 Completed)            
-            events_to_process = upcoming_events[:5] + completed_events[:5]
+            # Process the top 6 events (Upcoming + 1 Completed)            
+            events_to_process = upcoming_events[:5] + completed_events[:1]
             logger.info(f"Scraped {len(upcoming_events) + len(completed_events)} total events. Processing {len(events_to_process)} events.")
             
             fights_updated = 0
