@@ -4,6 +4,7 @@ from playwright.sync_api import sync_playwright
 from datetime import datetime
 from typing import List, Dict, Any
 import time
+import requests
 
 from client.api_client import ApiClient
 
@@ -293,6 +294,24 @@ def run_scraper_job():
             events_to_process = upcoming_events[:5] + completed_events[:1]
             logger.info(f"Scraped {len(upcoming_events) + len(completed_events)} total events. Processing {len(events_to_process)} events.")
             
+            # --- ESPN Exact Time Merge ---
+            try:
+                r = requests.get('https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard', timeout=10)
+                if r.status_code == 200:
+                    espn_events = r.json().get('events', [])
+                    for espn_ev in espn_events:
+                        espn_exact_date = espn_ev.get('date') # e.g. "2026-06-06T21:00Z"
+                        if espn_exact_date:
+                            espn_day = espn_exact_date[:10]
+                            # match with events_to_process
+                            for ev in events_to_process:
+                                if ev.get('eventDate') and ev['eventDate'][:10] == espn_day:
+                                    logger.info(f"Matched ESPN exact time for event {ev['name']}: {espn_exact_date}")
+                                    ev['eventDate'] = espn_exact_date
+            except Exception as e:
+                logger.warning(f"Failed to fetch exact time from ESPN API: {e}")
+            # ------------------------------
+            
             fights_updated = 0
             for recent_event in events_to_process:
                 # post_events returns the saved entities from the backend
@@ -319,6 +338,11 @@ def run_scraper_job():
                     f2_stats = scraper.scrape_fighter_stats(p, first_fight['fighter2Url'])
                     logger.info(f"Fighter 1 Stats: {f1_stats}")
                     logger.info(f"Fighter 2 Stats: {f2_stats}")
+        
+        # --- 4. Update the Active Fighter Roster ---
+        from scraper.roster_scraper import scrape_and_update_roster
+        scrape_and_update_roster(p)
+        # -------------------------------------------
         
         end_time = datetime.now()
         logger.info(f"Scraper job completed successfully in {end_time - start_time}")

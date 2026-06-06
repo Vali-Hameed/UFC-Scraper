@@ -39,6 +39,16 @@ def startup_event():
 def shutdown_event():
     scheduler.shutdown()
 
+@app.get("/fighters")
+def get_fighters():
+    """Return the active and inactive fighters roster."""
+    import json
+    file_path = os.path.join(os.path.dirname(__file__), 'fighters.json')
+    if os.path.exists(file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {"Active": {}, "Inactive": {}}
+
 @app.post("/trigger")
 def trigger_scrape(background_tasks: BackgroundTasks):
     """Manually trigger the scraper job."""
