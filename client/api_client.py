@@ -15,20 +15,24 @@ class ApiClient:
         }
 
     def post_events(self, events: List[Dict[str, Any]]):
-        url = f"{self.base_url}/internal/scraper/events"
+        url = f"{self.base_url}/api/v1/internal/scraper/events"
         return self._post(url, events)
 
     def post_fights(self, fights: List[Dict[str, Any]]):
-        url = f"{self.base_url}/internal/scraper/fights"
+        url = f"{self.base_url}/api/v1/internal/scraper/fights"
         return self._post(url, fights)
 
     def post_results(self, results: List[Dict[str, Any]]):
-        url = f"{self.base_url}/internal/scraper/results"
+        url = f"{self.base_url}/api/v1/internal/scraper/results"
         return self._post(url, results)
 
     def post_logs(self, log_data: Dict[str, Any]):
-        url = f"{self.base_url}/internal/scraper/logs"
+        url = f"{self.base_url}/api/v1/internal/scraper/logs"
         return self._post(url, log_data)
+
+    def post_roster(self, roster_data: Dict[str, Any]):
+        url = f"{self.base_url}/api/v1/internal/scraper/roster"
+        return self._post(url, roster_data)
 
     def _post(self, url: str, data: Any):
         try:

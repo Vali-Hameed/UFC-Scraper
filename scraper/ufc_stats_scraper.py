@@ -17,7 +17,7 @@ class UFCStatsScraper:
         self.api_client = ApiClient()
         self.api_client = ApiClient()
 
-    def scrape_events(self, p, url: str) -> List[Dict[str, Any]]:
+    def scrape_events(self, p, url: str, default_status: str) -> List[Dict[str, Any]]:
         """Scrape the events page."""
         logger.info(f"Scraping events list from {url}...")
         
@@ -45,22 +45,20 @@ class UFCStatsScraper:
                 continue
                 
             name = link_tag.text.strip()
-            url = link_tag['href']
+            event_url = link_tag['href']
             
             date_tag = columns[0].select_one('.b-statistics__date')
             date_str = date_tag.text.strip() if date_tag else None
             
             location = columns[1].text.strip().replace('\n', ' ') if len(columns) > 1 else None
             
-            status = "COMPLETED"
+            status = default_status
             iso_date_str = None
             if date_str:
                 try:
                     event_date = datetime.strptime(date_str, "%B %d, %Y")
                     # Add UTC timezone info for ISO-8601 compatibility with OffsetDateTime
                     iso_date_str = event_date.isoformat() + "Z"
-                    if event_date > datetime.now():
-                        status = "UPCOMING"
                 except Exception:
                     pass
             
@@ -68,7 +66,7 @@ class UFCStatsScraper:
                 "name": name,
                 "eventDate": iso_date_str,
                 "location": location,
-                "url": url,
+                "url": event_url,
                 "status": status
             })
             
@@ -287,8 +285,8 @@ def run_scraper_job():
     try:
         with sync_playwright() as p:
             # 1. Scrape Events
-            upcoming_events = scraper.scrape_events(p, scraper.upcoming_url)
-            completed_events = scraper.scrape_events(p, scraper.completed_url)
+            upcoming_events = scraper.scrape_events(p, scraper.upcoming_url, "UPCOMING")
+            completed_events = scraper.scrape_events(p, scraper.completed_url, "COMPLETED")
             
             # Process the top 6 events (Upcoming + 1 Completed)            
             events_to_process = upcoming_events[:5] + completed_events[:1]
@@ -338,11 +336,11 @@ def run_scraper_job():
                     f2_stats = scraper.scrape_fighter_stats(p, first_fight['fighter2Url'])
                     logger.info(f"Fighter 1 Stats: {f1_stats}")
                     logger.info(f"Fighter 2 Stats: {f2_stats}")
-        
-        # --- 4. Update the Active Fighter Roster ---
-        from scraper.roster_scraper import scrape_and_update_roster
-        scrape_and_update_roster(p)
-        # -------------------------------------------
+            
+            # --- 4. Update the Active Fighter Roster ---
+            from scraper.roster_scraper import scrape_and_update_roster
+            scrape_and_update_roster(p)
+            # -------------------------------------------
         
         end_time = datetime.now()
         logger.info(f"Scraper job completed successfully in {end_time - start_time}")
