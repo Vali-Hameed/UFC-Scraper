@@ -55,6 +55,13 @@ def trigger_scrape(background_tasks: BackgroundTasks):
     background_tasks.add_task(run_scraper_job)
     return {"message": "Scraper job triggered in the background"}
 
+@app.post("/trigger/historical")
+def trigger_historical_scrape(background_tasks: BackgroundTasks):
+    """Manually trigger a one-off historical scraper job."""
+    from scraper.ufc_stats_scraper import run_historical_scraper_job
+    background_tasks.add_task(run_historical_scraper_job)
+    return {"message": "Historical scraper job triggered in the background"}
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}

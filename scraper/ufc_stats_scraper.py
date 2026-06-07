@@ -364,3 +364,45 @@ def run_scraper_job():
             "status": "FAILED",
             "errorMessage": str(e)
         })
+
+def run_historical_scraper_job():
+    """Main execution function for a one-off historical scrape."""
+    logger.info("Starting historical UFC scraper job...")
+    start_time = datetime.now()
+    
+    scraper = UFCStatsScraper()
+    
+    try:
+        with sync_playwright() as p:
+            completed_events = scraper.scrape_events(p, scraper.completed_url, "COMPLETED")
+            logger.info(f"Scraped {len(completed_events)} historical events.")
+            
+            fights_updated = 0
+            
+            for idx, event in enumerate(completed_events):
+                logger.info(f"Processing event {idx + 1}/{len(completed_events)}: {event['name']}")
+                
+                saved_events = scraper.api_client.post_events([event])
+                db_event_id = None
+                if saved_events and isinstance(saved_events, list) and len(saved_events) > 0:
+                    db_event_id = saved_events[0].get('id')
+                
+                if db_event_id:
+                    fights = scraper.scrape_fight_card(p, event['url'], "COMPLETED")
+                    logger.info(f"  Scraped {len(fights)} fights.")
+                    
+                    for f in fights:
+                        f['eventId'] = db_event_id
+                            
+                    fights_updated += len(fights)
+                    scraper.api_client.post_fights(fights)
+                else:
+                    logger.warning(f"  Failed to save event {event['name']} to DB, skipping fights.")
+                
+                # Sleep briefly to be nice to the target server
+                time.sleep(1)
+                
+        end_time = datetime.now()
+        logger.info(f"Historical scrape completed successfully in {end_time - start_time}! Processed {len(completed_events)} events and {fights_updated} fights.")
+    except Exception as e:
+        logger.error(f"Historical scraper job failed: {e}", exc_info=True)
