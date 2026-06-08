@@ -63,5 +63,6 @@ def trigger_historical_scrape(background_tasks: BackgroundTasks):
     return {"message": "Historical scraper job triggered in the background"}
 
 @app.get("/health")
+@app.head("/health")
 def health_check():
     return {"status": "ok"}
