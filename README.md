@@ -2,6 +2,8 @@
 
 # UFC Scraper Microservice
 
+> **Note**: This repository houses the Python Scraper microservice. For the core full-stack web application, visit the [UFC-Fight-Predictor-Website](https://github.com/Vali-Hameed/UFC-Fight-Predictor-Website) repository.
+
 This is the standalone Python microservice responsible for scraping UFC events, fight cards, results, and fighter statistics from `ufcstats.com`. It provides up-to-date data for the core UFC Fight Predictor application and the FastAPI Machine Learning model.
 
 ## Features
@@ -37,5 +39,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ## Endpoints
+- `GET /fighters`: Retrieves a structured JSON roster of active and inactive fighters grouped by weight class.
 - `POST /trigger`: Manually starts the scraping job in the background.
+- `POST /trigger/historical`: Triggers a one-off historical scraper job to backfill past events.
 - `GET /health`: Health check endpoint.
