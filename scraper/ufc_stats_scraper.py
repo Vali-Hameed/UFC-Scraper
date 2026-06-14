@@ -300,12 +300,16 @@ def run_scraper_job():
                     for espn_ev in espn_events:
                         espn_exact_date = espn_ev.get('date') # e.g. "2026-06-06T21:00Z"
                         if espn_exact_date:
-                            espn_day = espn_exact_date[:10]
+                            espn_date_obj = datetime.strptime(espn_exact_date[:10], "%Y-%m-%d")
                             # match with events_to_process
                             for ev in events_to_process:
-                                if ev.get('eventDate') and ev['eventDate'][:10] == espn_day:
-                                    logger.info(f"Matched ESPN exact time for event {ev['name']}: {espn_exact_date}")
-                                    ev['eventDate'] = espn_exact_date
+                                if ev.get('eventDate'):
+                                    ev_date_obj = datetime.strptime(ev['eventDate'][:10], "%Y-%m-%d")
+                                    # Match if the dates are within 2 days of each other to account for timezone differences
+                                    if abs((espn_date_obj - ev_date_obj).days) <= 2:
+                                        logger.info(f"Matched ESPN exact time for event {ev['name']}: {espn_exact_date}")
+                                        ev['eventDate'] = espn_exact_date
+                                        break
             except Exception as e:
                 logger.warning(f"Failed to fetch exact time from ESPN API: {e}")
             # ------------------------------
