@@ -324,16 +324,24 @@ def run_scraper_job():
             
             fights_updated = 0
             for recent_event in events_to_process:
-                # post_events returns the saved entities from the backend
+                # 1. Scrape fight card first to determine true event status
+                fights = scraper.scrape_fight_card(p, recent_event['url'], recent_event['status'])
+                logger.info(f"Scraped {len(fights)} fights for {recent_event['name']}")
+                
+                # Determine if the event is truly completed by checking the main event
+                if recent_event['status'] == "COMPLETED" and fights:
+                    # main event is the first fight
+                    if not fights[0].get('resultWinner'):
+                        # Main event not finished, so event is still upcoming/live
+                        recent_event['status'] = "UPCOMING"
+                
+                # 2. Post the event to get the database ID
                 saved_events = scraper.api_client.post_events([recent_event])
                 db_event_id = None
                 if saved_events and isinstance(saved_events, list) and len(saved_events) > 0:
                     db_event_id = saved_events[0].get('id')
                 
-                # 2. Scrape fight card for the event
-                fights = scraper.scrape_fight_card(p, recent_event['url'], recent_event['status'])
-                logger.info(f"Scraped {len(fights)} fights for {recent_event['name']}")
-                
+                # 3. Post fights
                 if db_event_id:
                     for f in fights:
                         f['eventId'] = db_event_id
