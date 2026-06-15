@@ -139,8 +139,7 @@ class UFCStatsScraper:
                     
             fight_status = event_status
             if event_status == "COMPLETED" and not winner:
-                fight_status = "CANCELED"
-                winner = "Canceled"
+                fight_status = "UPCOMING"
             elif event_status == "UPCOMING":
                 fight_status = "UPCOMING"
             
