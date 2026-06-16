@@ -297,25 +297,50 @@ def run_scraper_job():
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Accept': 'application/json, text/plain, */*'
                 }
-                r = requests.get('https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard', headers=headers, timeout=10)
-                if r.status_code == 200:
-                    espn_events = r.json().get('events', [])
-                    for espn_ev in espn_events:
-                        espn_exact_date = espn_ev.get('date') # e.g. "2026-06-06T21:00Z"
-                        if espn_exact_date:
-                            try:
-                                parsed_espn_time = datetime.strptime(espn_exact_date, "%Y-%m-%dT%H:%MZ")
-                                espn_exact_date = parsed_espn_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-                            except ValueError:
-                                pass
-                            espn_date_obj = datetime.strptime(espn_exact_date[:10], "%Y-%m-%d")
-                            # match with events_to_process
-                            for ev in events_to_process:
-                                if ev.get('eventDate'):
-                                    ev_date_obj = datetime.strptime(ev['eventDate'][:10], "%Y-%m-%d")
-                                    # Match if the dates are within 2 days of each other to account for timezone differences
-                                    if abs((espn_date_obj - ev_date_obj).days) <= 2:
-                                        logger.info(f"Matched ESPN exact time for event {ev['name']}: {espn_exact_date}")
+                current_year = datetime.now().year
+                espn_events = []
+                for year in [current_year, current_year + 1]:
+                    url = f'https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates={year}'
+                    r = requests.get(url, headers=headers, timeout=10)
+                    if r.status_code == 200:
+                        espn_events.extend(r.json().get('events', []))
+                
+                for espn_ev in espn_events:
+                    espn_exact_date = espn_ev.get('date') # e.g. "2026-06-06T21:00Z"
+                    espn_name = espn_ev.get('name', '').lower().replace(':', '').replace('-', ' ')
+                    
+                    if espn_exact_date:
+                        try:
+                            parsed_espn_time = datetime.strptime(espn_exact_date, "%Y-%m-%dT%H:%MZ")
+                            espn_exact_date = parsed_espn_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                        except ValueError:
+                            pass
+                        espn_date_obj = datetime.strptime(espn_exact_date[:10], "%Y-%m-%d")
+                        
+                        import re
+                        espn_num = re.search(r'\b(\d{3})\b', espn_name)
+                        espn_words = set(w for w in espn_name.split() if len(w) >= 3 and w not in ['fight', 'night', 'edition', 'live', 'road', 'ufc', 'freedom'])
+                        
+                        # match with events_to_process
+                        for ev in events_to_process:
+                            if ev.get('eventDate'):
+                                ev_date_obj = datetime.strptime(ev['eventDate'][:10], "%Y-%m-%d")
+                                # Match if the dates are within 2 days
+                                if abs((espn_date_obj - ev_date_obj).days) <= 2:
+                                    ev_name = ev.get('name', '').lower().replace(':', '').replace('-', ' ')
+                                    ev_num = re.search(r'\b(\d{3})\b', ev_name)
+                                    ev_words = set(w for w in ev_name.split() if len(w) >= 3 and w not in ['fight', 'night', 'edition', 'live', 'road', 'ufc', 'freedom'])
+                                    
+                                    # Name matching: either exact number match OR word overlap
+                                    is_match = False
+                                    if ev_num and espn_num:
+                                        if ev_num.group(1) == espn_num.group(1):
+                                            is_match = True
+                                    elif ev_words.intersection(espn_words):
+                                        is_match = True
+                                        
+                                    if is_match:
+                                        logger.info(f"Matched ESPN exact time for event {ev['name']} (ESPN: {espn_ev.get('name')}): {espn_exact_date}")
                                         ev['eventDate'] = espn_exact_date
                                         break
             except Exception as e:
