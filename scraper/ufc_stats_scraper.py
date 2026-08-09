@@ -292,18 +292,17 @@ def run_scraper_job():
             logger.info(f"Scraped {len(upcoming_events) + len(completed_events)} total events. Processing {len(events_to_process)} events.")
             
             # --- ESPN Exact Time Merge ---
+            logger.info("Fetching exact times from ESPN API...")
             try:
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'application/json, text/plain, */*'
-                }
                 current_year = datetime.now().year
                 espn_events = []
                 for year in [current_year, current_year + 1]:
                     url = f'https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates={year}'
-                    r = requests.get(url, headers=headers, timeout=10)
+                    r = requests.get(url, timeout=10)
                     if r.status_code == 200:
                         espn_events.extend(r.json().get('events', []))
+                    else:
+                        logger.warning(f"Failed to fetch ESPN events for {year}. Status code: {r.status_code}")
                 
                 for espn_ev in espn_events:
                     espn_exact_date = espn_ev.get('date') # e.g. "2026-06-06T21:00Z"
@@ -319,7 +318,7 @@ def run_scraper_job():
                         
                         import re
                         espn_num = re.search(r'\b(\d{3})\b', espn_name)
-                        espn_words = set(w for w in espn_name.split() if len(w) >= 3 and w not in ['fight', 'night', 'edition', 'live', 'road', 'ufc', 'freedom'])
+                        espn_words = set(w for w in espn_name.split() if len(w) >= 3 and w not in ['fight', 'night', 'edition', 'live', 'road', 'ufc', 'freedom', 'vs', 'vs.'])
                         
                         # match with events_to_process
                         for ev in events_to_process:
@@ -329,14 +328,15 @@ def run_scraper_job():
                                 if abs((espn_date_obj - ev_date_obj).days) <= 2:
                                     ev_name = ev.get('name', '').lower().replace(':', '').replace('-', ' ')
                                     ev_num = re.search(r'\b(\d{3})\b', ev_name)
-                                    ev_words = set(w for w in ev_name.split() if len(w) >= 3 and w not in ['fight', 'night', 'edition', 'live', 'road', 'ufc', 'freedom'])
+                                    ev_words = set(w for w in ev_name.split() if len(w) >= 3 and w not in ['fight', 'night', 'edition', 'live', 'road', 'ufc', 'freedom', 'vs', 'vs.'])
                                     
                                     # Name matching: either exact number match OR word overlap
                                     is_match = False
                                     if ev_num and espn_num:
                                         if ev_num.group(1) == espn_num.group(1):
                                             is_match = True
-                                    elif ev_words.intersection(espn_words):
+                                    elif not ev_num and not espn_num and ev_words.intersection(espn_words):
+                                        # Only use word overlap when neither side has a 3-digit number
                                         is_match = True
                                         
                                     if is_match:
