@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import List, Dict, Any
 import time
 import requests
+import re
+from scraper.ufc_com_scraper import get_all_ufc_com_tiers
 
 from client.api_client import ApiClient
 
@@ -73,8 +75,10 @@ class UFCStatsScraper:
         browser.close()
         return events_data
 
-    def scrape_fight_card(self, p, event_url: str, event_status: str = "COMPLETED") -> List[Dict[str, Any]]:
+    def scrape_fight_card(self, p, event_url: str, event_status: str = "COMPLETED", ufc_com_tiers: dict = None) -> List[Dict[str, Any]]:
         """Scrape the fights for a specific event URL."""
+        if ufc_com_tiers is None:
+            ufc_com_tiers = {}
         logger.info(f"Scraping fight card from {event_url}...")
         
         browser = p.chromium.launch(headless=True)
@@ -157,6 +161,18 @@ class UFCStatsScraper:
                 "fighter2Url": fighter2_url,
                 "status": fight_status
             })
+            
+        for i, f in enumerate(fights_data):
+            # Check UFC.com dictionary by full name lowercased
+            f1_lower = f["fighter1Name"].lower()
+            f2_lower = f["fighter2Name"].lower()
+            
+            if f1_lower in ufc_com_tiers:
+                f["cardTier"] = ufc_com_tiers[f1_lower]
+            elif f2_lower in ufc_com_tiers:
+                f["cardTier"] = ufc_com_tiers[f2_lower]
+            else:
+                f["cardTier"] = None
             
         browser.close()
         return fights_data
@@ -347,10 +363,16 @@ def run_scraper_job():
                 logger.warning(f"Failed to fetch exact time from ESPN API: {e}")
             # ------------------------------
             
+            # --- UFC.com Exact Tiers ---
+            logger.info("Fetching explicit card tiers from UFC.com...")
+            ufc_com_tiers_mapping = get_all_ufc_com_tiers()
+            logger.info(f"Fetched {len(ufc_com_tiers_mapping)} fighter tier mappings from UFC.com")
+            # ---------------------------
+            
             fights_updated = 0
             for recent_event in events_to_process:
                 # 1. Scrape fight card first to determine true event status
-                fights = scraper.scrape_fight_card(p, recent_event['url'], recent_event['status'])
+                fights = scraper.scrape_fight_card(p, recent_event['url'], recent_event['status'], ufc_com_tiers_mapping)
                 logger.info(f"Scraped {len(fights)} fights for {recent_event['name']}")
                 
                 # Determine if the event is truly completed by checking the main event
