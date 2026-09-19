@@ -310,7 +310,7 @@ def run_scraper_job():
             # --- ESPN Exact Time Merge ---
             logger.info("Fetching exact times from ESPN API...")
             ESPN_HEADERS = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                'User-Agent': 'curl/8.4.0',
                 'Accept': 'application/json',
                 'Accept-Language': 'en-US,en;q=0.9',
             }
