@@ -309,14 +309,22 @@ def run_scraper_job():
             
             # --- ESPN Exact Time Merge ---
             logger.info("Fetching exact times from ESPN API...")
+            ESPN_HEADERS = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                'Accept': 'application/json',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
             try:
                 current_year = datetime.now().year
                 espn_events = []
                 for year in [current_year, current_year + 1]:
                     url = f'https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates={year}'
-                    r = requests.get(url, timeout=10)
+                    r = requests.get(url, headers=ESPN_HEADERS, timeout=10)
                     if r.status_code == 200:
-                        espn_events.extend(r.json().get('events', []))
+                        try:
+                            espn_events.extend(r.json().get('events', []))
+                        except ValueError:
+                            logger.warning(f"ESPN returned non-JSON response for {year}")
                     else:
                         logger.warning(f"Failed to fetch ESPN events for {year}. Status code: {r.status_code}")
                 
